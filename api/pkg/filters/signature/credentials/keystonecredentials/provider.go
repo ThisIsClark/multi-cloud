@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
+	log "github.com/micro/go-log"
 	"github.com/gophercloud/gophercloud"
 	creds "github.com/gophercloud/gophercloud/openstack/identity/v3/credentials"
 	"github.com/opensds/multi-cloud/api/pkg/filters/auth"
@@ -59,7 +59,7 @@ func NewProviderClient(accessKeyID string, options ...func(*KeystoneProvider)) c
 	}
 	kp.Identity = auth.GetIdentity(k)
 
-	log.Infof("Service Token Info: %s", kp.Identity.TokenID)
+	log.Logf("Service Token Info: %s", kp.Identity.TokenID)
 
 	return kp
 }
@@ -101,13 +101,13 @@ func (p *KeystoneProvider) getCredentials(accessKeyID string) (*GetCredentialOut
 
 	credentials, err := creds.ExtractCredentials(allPages)
 	if err != nil {
-		log.Errorf("getCredentials failed, err: %+v", err)
+		log.Logf("getCredentials failed, err: %+v", err)
 		return nil, err
 	}
-	log.Infof("provider-Credentials: %+v", credentials)
+	log.Logf("provider-Credentials: %+v", credentials)
 
 	cred, err := getCredential(credentials, accessKeyID)
-	log.Infof("cred: %+v", cred)
+	log.Logf("cred: %+v", cred)
 
 	return cred, err
 }
@@ -132,7 +132,7 @@ func getCredential(credentials []creds.Credential, accessKeyID string) (*GetCred
 				UserID:          credential.UserID,
 			}
 
-			log.Infof("Get credential for %s successfully.", blob.Access)
+			log.Logf("Get credential for %s successfully.", blob.Access)
 			return out, nil
 		}
 	}

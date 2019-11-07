@@ -4,13 +4,13 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
-	log "github.com/sirupsen/logrus"
+	"github.com/micro/go-log"
 )
 
 var Producer sarama.SyncProducer
 
 func Init(addrs []string) error {
-	log.Info("Init producer")
+	log.Log("Init producer")
 	config := sarama.NewConfig()
 	config.Producer.RequiredAcks = sarama.WaitForAll
 	config.Producer.Partitioner = sarama.NewRandomPartitioner
@@ -30,7 +30,7 @@ func Init(addrs []string) error {
 		}
 	}
 	if err != nil {
-		log.Errorf("Create producer failed, err:%v", err)
+		log.Logf("Create producer failed, err:%v", err)
 	}
 
 	return err
@@ -41,12 +41,12 @@ func ProduceMsg(topic string, msg []byte) error {
 	kafkaMsg.Value = sarama.ByteEncoder(msg)
 
 	//producer.Input() <- msg
-	log.Infof("send message:%s\n", kafkaMsg)
+	log.Logf("send message:%s\n", kafkaMsg)
 	partition, offset, err := Producer.SendMessage(kafkaMsg)
 	if err != nil {
-		log.Errorf("Producer send message failed, err:%v\n", err)
+		log.Logf("Producer send message failed, err:%v\n", err)
 	} else {
-		log.Infof("message is stored in topic(%s)/partition(%d)/offset(%d)\n", topic, partition, offset)
+		log.Logf("message is stored in topic(%s)/partition(%d)/offset(%d)\n", topic, partition, offset)
 	}
 
 	return err

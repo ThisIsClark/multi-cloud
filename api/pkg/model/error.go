@@ -25,7 +25,7 @@ import (
 	"fmt"
 
 	"github.com/emicklei/go-restful"
-	log "github.com/sirupsen/logrus"
+	log "github.com/golang/glog"
 )
 
 const (

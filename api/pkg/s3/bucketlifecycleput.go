@@ -23,7 +23,7 @@ import (
 	"sync"
 
 	"github.com/emicklei/go-restful"
-	log "github.com/sirupsen/logrus"
+	"github.com/micro/go-log"
 	"github.com/opensds/multi-cloud/api/pkg/common"
 	. "github.com/opensds/multi-cloud/api/pkg/utils/constants"
 	"github.com/opensds/multi-cloud/s3/pkg/model"
@@ -37,10 +37,10 @@ var mutext sync.Mutex
 
 func (s *APIService) loadStorageClassDefinition() error {
 	ctx := context.Background()
-	log.Info("Load storage classes.")
+	log.Log("Load storage classes.")
 	res, err := s.s3Client.GetStorageClasses(ctx, &s3.BaseRequest{})
 	if err != nil {
-		log.Errorf("get storage classes from s3 service failed: %v\n", err)
+		log.Logf("get storage classes from s3 service failed: %v\n", err)
 		return err
 	}
 	ClassAndTier = make(map[string]int32)
@@ -57,24 +57,24 @@ func (s *APIService) class2tier(name string) (int32, error) {
 		if len(ClassAndTier) == 0 {
 			err := s.loadStorageClassDefinition()
 			if err != nil {
-				log.Errorf("load storage classes failed: %v.\n", err)
+				log.Logf("load storage classes failed: %v.\n", err)
 				return 0, err
 			}
 		}
 	}
 	tier, ok := ClassAndTier[name]
 	if !ok {
-		log.Errorf("translate storage class name[%s] to tier failed: %s.\n", name)
+		log.Logf("translate storage class name[%s] to tier failed: %s.\n", name)
 		return 0, fmt.Errorf("invalid storage class:%s", name)
 	}
-	log.Infof("class[%s] to tier[%d]\n", name, tier)
+	log.Logf("class[%s] to tier[%d]\n", name, tier)
 	return tier, nil
 }
 
 func checkValidationOfActions(actions []*s3.Action) error {
 	var pre *s3.Action = nil
 	for _, action := range actions {
-		log.Infof("action: %+v\n", *action)
+		log.Logf("action: %+v\n", *action)
 		if pre == nil {
 			if action.Name == ActionNameExpiration && action.Days < ExpirationMinDays {
 				// If only an expiration action for a rule, the days for that action should be more than ExpirationMinDays
@@ -114,17 +114,17 @@ func checkValidationOfActions(actions []*s3.Action) error {
 
 func (s *APIService) BucketLifecyclePut(request *restful.Request, response *restful.Response) {
 	bucketName := request.PathParameter("bucketName")
-	log.Infof("received request for create bucket lifecycle: %s", bucketName)
+	log.Logf("received request for create bucket lifecycle: %s", bucketName)
 
 	ctx := common.InitCtxWithAuthInfo(request)
-	bucket, err := s.s3Client.GetBucket(ctx, &s3.BaseRequest{Id: bucketName})
+	bucket, err := s.s3Client.GetBucket(ctx, &s3.Bucket{Name: bucketName})
 	if err != nil {
-		log.Errorf("get bucket failed, err=%v\n", err)
+		log.Logf("get bucket failed, err=%v\n", err)
 		response.WriteError(http.StatusInternalServerError, fmt.Errorf("bucket does not exist"))
 	}
 
 	body := ReadBody(request)
-	log.Infof("MD5 sum for body is %x", md5.Sum(body))
+	log.Logf("MD5 sum for body is %x", md5.Sum(body))
 
 	if body != nil {
 		createLifecycleConf := model.LifecycleConfiguration{}
@@ -140,7 +140,7 @@ func (s *APIService) BucketLifecyclePut(request *restful.Request, response *rest
 
 				//check if the ruleID has any duplicate values
 				if _, ok := dupIdCheck[rule.ID]; ok {
-					log.Errorf("duplicate ruleID found for rule : %s\n", rule.ID)
+					log.Logf("duplicate ruleID found for rule : %s\n", rule.ID)
 					ErrStr := strings.Replace(DuplicateRuleIDError, "$1", rule.ID, 1)
 					response.WriteError(http.StatusBadRequest, fmt.Errorf(ErrStr))
 					return
@@ -150,7 +150,7 @@ func (s *APIService) BucketLifecyclePut(request *restful.Request, response *rest
 				s3Rule.Id = rule.ID
 
 				//Assigning the status value to s3 status
-				log.Infof("status in rule file is %v\n", rule.Status)
+				log.Logf("status in rule file is %v\n", rule.Status)
 				s3Rule.Status = rule.Status
 
 				//Assigning the filter, using convert function to convert xml struct to s3 struct
@@ -192,7 +192,7 @@ func (s *APIService) BucketLifecyclePut(request *restful.Request, response *rest
 				//validate actions
 				err := checkValidationOfActions(s3ActionArr)
 				if err != nil {
-					log.Errorf("validation of actions failed: %v\n", err)
+					log.Logf("validation of actions failed: %v\n", err)
 					response.WriteError(http.StatusBadRequest, err)
 					return
 				}
@@ -209,7 +209,7 @@ func (s *APIService) BucketLifecyclePut(request *restful.Request, response *rest
 			bucket.LifecycleConfiguration = s3RulePtrArr
 		}
 	} else {
-		log.Info("no request body provided for creating lifecycle configuration")
+		log.Log("no request body provided for creating lifecycle configuration")
 		response.WriteError(http.StatusBadRequest, fmt.Errorf(NoRequestBodyLifecycle))
 		return
 	}
@@ -221,7 +221,7 @@ func (s *APIService) BucketLifecyclePut(request *restful.Request, response *rest
 		response.WriteError(http.StatusInternalServerError, err)
 		return
 	}
-	log.Info("create bucket lifecycle successful.")
+	log.Log("create bucket lifecycle successful.")
 	response.WriteEntity(res)
 
 }

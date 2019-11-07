@@ -18,7 +18,7 @@ import (
 	"context"
 
 	"github.com/globalsign/mgo/bson"
-	log "github.com/sirupsen/logrus"
+	"github.com/micro/go-log"
 	. "github.com/opensds/multi-cloud/s3/pkg/exception"
 	pb "github.com/opensds/multi-cloud/s3/proto"
 )
@@ -28,7 +28,7 @@ func (ad *adapter) ListBuckets(ctx context.Context, in *pb.BaseRequest, out *[]p
 	defer ss.Close()
 	c := ss.DB(DataBaseName).C(BucketMD)
 
-	log.Info("list buckets from database...... \n")
+	log.Log("list buckets from database...... \n")
 
 	m := bson.M{}
 	err := UpdateContextFilter(ctx, m)
@@ -38,7 +38,7 @@ func (ad *adapter) ListBuckets(ctx context.Context, in *pb.BaseRequest, out *[]p
 
 	err = c.Find(m).All(out)
 	if err != nil {
-		log.Errorf("find buckets from database failed, err:%v\n", err)
+		log.Log("find buckets from database failed, err:%v\n", err)
 		return DBError
 	}
 

@@ -17,17 +17,17 @@ package Gcps3mover
 import (
 	"errors"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/micro/go-log"
 	. "github.com/opensds/multi-cloud/datamover/pkg/utils"
 )
 
 func (mover *GcpS3Mover) ChangeStorageClass(objKey *string, newClass *string, bkend *BackendInfo) error {
-	log.Info("gcp s3 change storage class of %s to %s failed.", objKey, newClass)
+	log.Log("gcp s3 change storage class of %s to %s failed.", objKey, newClass)
 	return errors.New(DMERR_InternalError)
 }
 
 func (mover *GcpS3Mover) DeleteIncompleteMultipartUpload(objKey, uploadId string, destLoca *LocationInfo) error {
-	log.Info("gcp s3 does not support to delete incomplete multipart upload.")
+	log.Log("gcp s3 does not support to delete incomplete multipart upload.")
 
 	return errors.New(DMERR_InternalError)
 }

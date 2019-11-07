@@ -17,16 +17,9 @@ package main
 import (
 	"fmt"
 
-	"github.com/micro/go-micro"
-	"github.com/opensds/multi-cloud/api/pkg/utils/obs"
-	_ "github.com/opensds/multi-cloud/s3/pkg/datastore"
-	handler "github.com/opensds/multi-cloud/s3/pkg/service"
+	micro "github.com/micro/go-micro"
+	handler "github.com/opensds/multi-cloud/s3/pkg"
 	pb "github.com/opensds/multi-cloud/s3/proto"
-	"github.com/opensds/multi-cloud/s3/pkg/datastore/driver"
-	"github.com/opensds/multi-cloud/s3/pkg/datastore/yig/config"
-	"github.com/opensds/multi-cloud/s3/pkg/helper"
-	"github.com/opensds/multi-cloud/s3/pkg/meta/redis"
-	log "github.com/sirupsen/logrus"
 )
 
 func main() {
@@ -34,24 +27,9 @@ func main() {
 		micro.Name("s3"),
 	)
 
-	obs.InitLogs()
-	service.Init(micro.AfterStop(func() error {
-		driver.FreeCloser()
-		return nil
-	}))
+	micro.NewService()
 
-	helper.SetupConfig()
-
-	log.Infof("YIG conf: %+v \n", helper.CONFIG)
-	log.Infof("YIG instance ID:", helper.CONFIG.InstanceId)
-
-	if helper.CONFIG.MetaCacheType > 0 || helper.CONFIG.EnableDataCache {
-		cfg := config.CacheConfig{
-			Mode:    helper.CONFIG.RedisMode,
-			Address: helper.CONFIG.RedisAddress,
-		}
-		redis.Initialize(&cfg)
-	}
+	service.Init()
 
 	pb.RegisterS3Handler(service.Server(), handler.NewS3Service())
 	if err := service.Run(); err != nil {

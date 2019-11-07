@@ -9,8 +9,6 @@ import (
 	"reflect"
 	"strings"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 )
 
 func cleanHeaderPrefix(header http.Header) map[string][]string {
@@ -509,7 +507,9 @@ func ParseGetObjectOutput(output *GetObjectOutput) {
 func ConvertRequestToIoReaderV2(req interface{}) (io.Reader, string, error) {
 	data, err := TransToXml(req)
 	if err == nil {
-		log.Debug("Do http request with data: %s", string(data))
+		if isDebugLogEnabled() {
+			doLog(LEVEL_DEBUG, "Do http request with data: %s", string(data))
+		}
 		return bytes.NewReader(data), Base64Md5(data), nil
 	}
 	return nil, "", err
@@ -518,7 +518,9 @@ func ConvertRequestToIoReaderV2(req interface{}) (io.Reader, string, error) {
 func ConvertRequestToIoReader(req interface{}) (io.Reader, error) {
 	body, err := TransToXml(req)
 	if err == nil {
-		log.Debug("Do http request with data: %s", string(body))
+		if isDebugLogEnabled() {
+			doLog(LEVEL_DEBUG, "Do http request with data: %s", string(body))
+		}
 		return bytes.NewReader(body), nil
 	}
 	return nil, err
@@ -533,7 +535,7 @@ func ParseResponseToBaseModel(resp *http.Response, baseModel IBaseModel, xmlResu
 			if xmlResult {
 				err = ParseXml(body, baseModel)
 				if err != nil {
-					log.Error("Unmarshal error: %v", err)
+					doLog(LEVEL_ERROR, "Unmarshal error: %v", err)
 				}
 			} else {
 				s := reflect.TypeOf(baseModel).Elem()
