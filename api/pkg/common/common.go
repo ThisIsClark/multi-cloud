@@ -21,7 +21,7 @@ import (
 	"context"
 
 	"github.com/emicklei/go-restful"
-	"github.com/micro/go-log"
+	log "github.com/sirupsen/logrus"
 	c "github.com/opensds/multi-cloud/api/pkg/context"
 	"github.com/micro/go-micro/metadata"
 )
@@ -30,6 +30,7 @@ const (
 	MaxPaginationLimit      = 1000
 	DefaultPaginationLimit  = MaxPaginationLimit
 	DefaultPaginationOffset = 0
+	MaxObjectSize           = 5 * 1024 * 1024 // 5GB
 	SortDirectionAsc        = "asc"
 	SortDirectionDesc       = "desc"
 )
@@ -48,13 +49,19 @@ const (
 	CTX_KEY_USER_ID   = "Userid"
 	CTX_KEY_IS_ADMIN  = "Isadmin"
 	CTX_VAL_TRUE      = "true"
+	CTX_KEY_OBJECT_KEY  = "ObjectKey"
+	CTX_KEY_BUCKET_NAME = "BucketName"
+	CTX_KEY_SIZE        = "ObjectSize"
+	CTX_KEY_LOCATION    = "Location"
 )
 
 const (
-	REST_KEY_OPERATION       = "operation"
-	REST_VAL_MULTIPARTUPLOAD = "multipartupload"
-	REST_VAL_DOWNLOAD        = "download"
-	REST_VAL_UPLOAD          = "upload"
+	REQUEST_PATH_BUCKET_NAME      = "bucketName"
+	REQUEST_PATH_OBJECT_KEY       = "objectKey"
+	REQUEST_HEADER_CONTENT_LENGTH = "Content-Length"
+	REQUEST_HEADER_STORAGE_CLASS  = "x-amz-storage-class"
+	REQUEST_HEADER_COPY_SOURCE  = "X-Amz-Copy-Source"
+	REQUEST_HEADER_ACL = "x-amz-acl"
 )
 
 func GetPaginationParam(request *restful.Request) (int32, int32, error) {
@@ -64,7 +71,7 @@ func GetPaginationParam(request *restful.Request) (int32, int32, error) {
 	if request.QueryParameter(KLimit) != "" {
 		limitVal, err := strconv.Atoi(request.QueryParameter("limit"))
 		if err != nil {
-			log.Logf("limit is invalid: %v", err)
+			log.Errorf("limit is invalid: %v", err)
 			return limit, offset, err
 		}
 		if limit > int32(limitVal) {
@@ -75,7 +82,7 @@ func GetPaginationParam(request *restful.Request) (int32, int32, error) {
 	if request.QueryParameter(KOffset) != "" {
 		offsetVal, err := strconv.Atoi(request.QueryParameter("offset"))
 		if err != nil {
-			log.Logf("offset is invalid: %v", err)
+			log.Errorf("offset is invalid: %v", err)
 			return limit, offset, err
 		}
 		offset = int32(offsetVal)
