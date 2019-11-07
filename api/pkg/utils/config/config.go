@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	"github.com/go-ini/ini"
-	log "github.com/sirupsen/logrus"
+	log "github.com/golang/glog"
 )
 
 const (

@@ -19,7 +19,7 @@ import (
 
 	"github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
-	log "github.com/sirupsen/logrus"
+	"github.com/micro/go-log"
 	. "github.com/opensds/multi-cloud/s3/pkg/exception"
 	. "github.com/opensds/multi-cloud/s3/pkg/utils"
 	pb "github.com/opensds/multi-cloud/s3/proto"
@@ -29,7 +29,7 @@ func (ad *adapter) GetBucketByName(ctx context.Context, bucketName string, out *
 	ss := ad.s.Copy()
 	defer ss.Close()
 
-	log.Infof("GetBucketByName: bucketName %s", bucketName)
+	log.Logf("GetBucketByName: bucketName %s", bucketName)
 
 	m := bson.M{DBKEY_NAME: bucketName}
 	err := UpdateContextFilter(ctx, m)
@@ -39,10 +39,10 @@ func (ad *adapter) GetBucketByName(ctx context.Context, bucketName string, out *
 
 	err = ss.DB(DataBaseName).C(BucketMD).Find(m).One(out)
 	if err == mgo.ErrNotFound {
-		log.Error("bucket does not exist.")
+		log.Log("bucket does not exist.")
 		return NoSuchBucket
 	} else if err != nil {
-		log.Errorf("get bucket from database failed, err: %v.\n", err)
+		log.Logf("get bucket from database failed, err: %v.\n", err)
 		return InternalError
 	}
 

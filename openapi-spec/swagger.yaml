@@ -655,6 +655,10 @@ paths:
       responses:
         '200':
           description: successful upload a object
+          content:
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/BaseResponse'
     get:
       tags:
         - s3

@@ -15,13 +15,12 @@
 package main
 
 import (
-	log "github.com/sirupsen/logrus"
+	"github.com/micro/go-log"
 	"github.com/micro/go-micro"
 	handler "github.com/opensds/multi-cloud/dataflow/pkg"
 	"github.com/opensds/multi-cloud/dataflow/pkg/scheduler"
 	_ "github.com/opensds/multi-cloud/dataflow/pkg/scheduler/trigger/crontrigger"
 	pb "github.com/opensds/multi-cloud/dataflow/proto"
-	"github.com/opensds/multi-cloud/api/pkg/utils/obs"
 )
 
 func main() {
@@ -29,14 +28,13 @@ func main() {
 		micro.Name("dataflow"),
 	)
 
-	obs.InitLogs()
-	log.Info("Init dataflow service.")
+	log.Log("Init dataflow service.")
 	service.Init()
 	pb.RegisterDataFlowHandler(service.Server(), handler.NewDataFlowService())
 	scheduler.LoadAllPlans()
 	scheduler.LoadLifecycleScheduler()
 	if err := service.Run(); err != nil {
-		log.Info(err)
+		log.Log(err)
 	}
 }
 

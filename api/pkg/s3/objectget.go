@@ -15,13 +15,17 @@
 package s3
 
 import (
+	"bytes"
+	"net/http"
+	"strconv"
+	"strings"
+
 	"github.com/emicklei/go-restful"
-	log "github.com/sirupsen/logrus"
-	/*c "github.com/opensds/multi-cloud/api/pkg/context"
+	"github.com/micro/go-log"
+	"github.com/opensds/multi-cloud/api/pkg/common"
+	"github.com/opensds/multi-cloud/api/pkg/s3/datastore"
 	. "github.com/opensds/multi-cloud/s3/pkg/exception"
-	s3 "github.com/opensds/multi-cloud/s3/proto"
-	"golang.org/x/net/context"
-	*/
+	"github.com/opensds/multi-cloud/s3/proto"
 )
 
 //ObjectGet -
@@ -29,9 +33,7 @@ func (s *APIService) ObjectGet(request *restful.Request, response *restful.Respo
 	bucketName := request.PathParameter("bucketName")
 	objectKey := request.PathParameter("objectKey")
 	rangestr := request.HeaderParameter("Range")
-	log.Infof("%v\n", rangestr)
-/*
-	log.Infof("Received request for object get, bucket: %s, object: %s, range: %s\n",
+	log.Logf("Received request for object get, bucket: %s, object: %s, range: %s\n",
 		bucketName, objectKey, rangestr)
 
 	start := 0
@@ -48,15 +50,15 @@ func (s *APIService) ObjectGet(request *restful.Request, response *restful.Respo
 	ctx := common.InitCtxWithVal(request, md)
 	object := s3.Object{}
 	objectInput := s3.GetObjectInput{Bucket: bucketName, Key: objectKey}
-	log.Infof("enter the s3Client download method")
+	log.Logf("enter the s3Client download method")
 	objectMD, _ := s.s3Client.GetObject(ctx, &objectInput)
-	log.Infof("out the s3Client download method")
+	log.Logf("out the s3Client download method")
 	var backendname string
 	if objectMD != nil {
 		object.Size = objectMD.Size
 		backendname = objectMD.Backend
 	} else {
-		log.Errorf("No such object")
+		log.Logf("No such object")
 		response.WriteError(http.StatusInternalServerError, NoSuchObject.Error())
 		return
 	}
@@ -73,9 +75,9 @@ func (s *APIService) ObjectGet(request *restful.Request, response *restful.Respo
 		response.WriteError(http.StatusInternalServerError, NoSuchBackend.Error())
 		return
 	}
-	log.Infof("enter the download method")
+	log.Logf("enter the download method")
 	body, s3err := client.GET(&object, ctx, int64(start), int64(end))
-	log.Infof("out  the download method")
+	log.Logf("out  the download method")
 	if s3err != NoError {
 		response.WriteError(http.StatusInternalServerError, s3err.Error())
 		return
@@ -83,6 +85,4 @@ func (s *APIService) ObjectGet(request *restful.Request, response *restful.Respo
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(body)
 	response.Write(buf.Bytes())
-	*/
-	log.Infof("Init multipart upload[bucketName=%s, objectKey=%s] successfully.\n", bucketName, objectKey)
 }

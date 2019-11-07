@@ -16,12 +16,12 @@ package logging
 
 import (
 	"github.com/emicklei/go-restful"
-	log "github.com/sirupsen/logrus"
+	"github.com/micro/go-log"
 )
 
 func FilterFactory() restful.FilterFunction {
 	return func(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
-		log.Infof("\033[32m[D] %s -- %s %s\033[0m\n", req.Request.RemoteAddr, req.Request.Method,
+		log.Logf("\033[32m[D] %s -- %s %s\033[0m\n", req.Request.RemoteAddr, req.Request.Method,
 			req.Request.URL)
 		chain.ProcessFilter(req, resp)
 	}

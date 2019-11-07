@@ -29,7 +29,7 @@ import (
 	"strings"
 
 	"github.com/emicklei/go-restful"
-	log "github.com/sirupsen/logrus"
+	log "github.com/golang/glog"
 	c "github.com/opensds/multi-cloud/api/pkg/context"
 	"github.com/opensds/multi-cloud/api/pkg/filters/signature/credentials"
 	"github.com/opensds/multi-cloud/api/pkg/filters/signature/credentials/keystonecredentials"

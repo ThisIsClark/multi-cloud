@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
-	log "github.com/sirupsen/logrus"
+	"github.com/micro/go-log"
 	. "github.com/opensds/multi-cloud/datamover/pkg/utils"
 	pb "github.com/opensds/multi-cloud/datamover/proto"
 )
@@ -50,11 +50,8 @@ func handleAzureBlobErrors(err error) error {
 			code := string(serr.ServiceCode())
 			switch code { // Compare serviceCode to ServiceCodeXxx constants
 			case string(azblob.StorageErrorCodeAuthenticationFailed):
-				log.Info("azure error: permission denied.")
+				log.Log("azure error: permission denied.")
 				return errors.New(DMERR_NoPermission)
-			case string(azblob.StorageErrorCodeContainerNotFound):
-				log.Info("azure error: container not found.")
-				return errors.New(DMERR_BucketNotFound)
 			default:
 				return err
 			}
@@ -68,11 +65,11 @@ func (mover *BlobMover) Init(endpoint *string, acountName *string, accountKey *s
 	var err error
 	mover.containerURL, err = mover.createContainerURL(endpoint, acountName, accountKey)
 	if err != nil {
-		log.Errorf("[blobmover] init container URL faild:%v\n", err)
+		log.Logf("[blobmover] init container URL faild:%v\n", err)
 		return handleAzureBlobErrors(err)
 	}
 
-	log.Info("[blobmover] Init succeed, container URL:", mover.containerURL.String())
+	log.Log("[blobmover] Init succeed, container URL:", mover.containerURL.String())
 	return nil
 }
 
@@ -80,7 +77,7 @@ func (mover *BlobMover) createContainerURL(endpoint *string, acountName *string,
 	error) {
 	credential, err := azblob.NewSharedKeyCredential(*acountName, *accountKey)
 	if err != nil {
-		log.Errorf("[blobmover] create credential failed, err:%v\n", err)
+		log.Logf("[blobmover] create credential failed, err:%v\n", err)
 		return azblob.ContainerURL{}, handleAzureBlobErrors(err)
 	}
 
@@ -101,14 +98,14 @@ func (mover *BlobMover) DownloadObj(objKey string, srcLoca *LocationInfo, buf []
 		return 0, handleAzureBlobErrors(err)
 	}
 
-	log.Infof("[blobmover] Try to download, bucket:%s,obj:%s\n", srcLoca.BucketName, objKey)
+	log.Logf("[blobmover] Try to download, bucket:%s,obj:%s\n", srcLoca.BucketName, objKey)
 	ctx := context.Background()
 	blobURL := mover.containerURL.NewBlockBlobURL(objKey)
 	for tries := 1; tries <= 3; tries++ {
 		downloadResp, err := blobURL.Download(ctx, 0, azblob.CountToEnd, azblob.BlobAccessConditions{},
 			false)
 		if err != nil {
-			log.Errorf("[blobmover] download object[%s] failed %d times, err:%v\n", objKey, tries, err)
+			log.Logf("[blobmover] download object[%s] failed %d times, err:%v\n", objKey, tries, err)
 			e := handleAzureBlobErrors(err)
 			if tries >= 3 || e.Error() == DMERR_NoPermission { //If no permission, then no need to retry.
 				return 0, e
@@ -124,19 +121,19 @@ func (mover *BlobMover) DownloadObj(objKey string, srcLoca *LocationInfo, buf []
 					size += int64(readCount)
 				}
 				if readErr != nil {
-					log.Errorf("[blobmover] readErr[objkey:%s]=%v\n", objKey, readErr)
+					log.Logf("[blobmover] readErr[objkey:%s]=%v\n", objKey, readErr)
 					break
 				}
 			}
 			if readErr == io.EOF {
 				readErr = nil
 			}
-			log.Infof("[blobmover] Download object[%s] successfully.", objKey)
+			log.Logf("[blobmover] Download object[%s] successfully.", objKey)
 			return size, readErr
 		}
 	}
 
-	log.Infof("[blobmover] download object[%s], should not be here.", objKey)
+	log.Logf("[blobmover] download object[%s], should not be here.", objKey)
 	return 0, errors.New(DMERR_InternalError)
 }
 
@@ -148,23 +145,23 @@ func (mover *BlobMover) UploadObj(objKey string, destLoca *LocationInfo, buf []b
 
 	ctx := context.Background()
 	blobURL := mover.containerURL.NewBlockBlobURL(objKey)
-	log.Infof("[blobmover] Try to upload object[%s].", objKey)
+	log.Logf("[blobmover] Try to upload object[%s].", objKey)
 	for tries := 1; tries <= 3; tries++ {
 		uploadResp, err := blobURL.Upload(ctx, bytes.NewReader(buf), azblob.BlobHTTPHeaders{}, nil,
 			azblob.BlobAccessConditions{})
 		if err != nil {
-			log.Errorf("[blobmover] upload object[%s] failed %d times, err:%v\n", objKey, tries, err)
+			log.Logf("[blobmover] upload object[%s] failed %d times, err:%v\n", objKey, tries, err)
 			e := handleAzureBlobErrors(err)
 			if tries >= 3 || e.Error() == DMERR_NoPermission { //If no permission, then no need to retry.
 				return e
 			}
 		} else if uploadResp.StatusCode() != HTTP_CREATED {
-			log.Infof("[blobmover] upload object[%s] StatusCode:%d\n", objKey, uploadResp.StatusCode())
+			log.Logf("[blobmover] upload object[%s] StatusCode:%d\n", objKey, uploadResp.StatusCode())
 			if tries == 3 {
 				return errors.New(DMERR_InternalError)
 			}
 		} else {
-			log.Infof("[blobmover] Upload object[%s] successfully.", objKey)
+			log.Logf("[blobmover] Upload object[%s] successfully.", objKey)
 			if destLoca.ClassName != "" {
 				err := mover.setTier(&objKey, &destLoca.ClassName)
 				if err != nil {
@@ -175,7 +172,7 @@ func (mover *BlobMover) UploadObj(objKey string, destLoca *LocationInfo, buf []b
 		}
 	}
 
-	log.Infof("[blobmover] upload object[%s], should not be here.", objKey)
+	log.Logf("[blobmover] upload object[%s], should not be here.", objKey)
 	return errors.New(DMERR_InternalError)
 }
 
@@ -187,39 +184,39 @@ func (mover *BlobMover) DeleteObj(objKey string, loca *LocationInfo) error {
 
 	ctx := context.Background()
 	blobURL := mover.containerURL.NewBlockBlobURL(objKey)
-	log.Infof("[blobmover] Try to delete object[%s].", objKey)
+	log.Logf("[blobmover] Try to delete object[%s].", objKey)
 	for tries := 1; tries <= 3; tries++ {
 		delRsp, err := blobURL.Delete(ctx, azblob.DeleteSnapshotsOptionInclude, azblob.BlobAccessConditions{})
 		if err != nil {
-			log.Errorf("[blobmover] delete object[%s] failed %d times, err:%v\n", objKey, tries, err)
+			log.Logf("[blobmover] delete object[%s] failed %d times, err:%v\n", objKey, tries, err)
 			e := handleAzureBlobErrors(err)
 			if tries >= 3 || e.Error() == DMERR_NoPermission { //If no permission, then no need to retry.
 				return e
 			}
 		} else if delRsp.StatusCode() == HTTP_OK || delRsp.StatusCode() == HTTP_ACCEPTED {
-			log.Infof("[blobmover] delete object[%s] successfully.", objKey)
+			log.Logf("[blobmover] delete object[%s] successfully.", objKey)
 			return nil
 		} else {
-			log.Infof("[blobmover] delete object[%s] StatusCode:%d\n", objKey, delRsp.StatusCode())
+			log.Logf("[blobmover] delete object[%s] StatusCode:%d\n", objKey, delRsp.StatusCode())
 			if tries >= 3 {
 				return errors.New(DMERR_InternalError)
 			}
 		}
 	}
 
-	log.Infof("[blobmover] delete object[%s], should not be here.", objKey)
+	log.Logf("[blobmover] delete object[%s], should not be here.", objKey)
 	return errors.New(DMERR_InternalError)
 }
 
 func (mover *BlobMover) MultiPartDownloadInit(srcLoca *LocationInfo) error {
-	log.Infof("[blobmover] Prepare to do part upload, container:%s.\n", srcLoca.BucketName)
+	log.Logf("[blobmover] Prepare to do part upload, container:%s.\n", srcLoca.BucketName)
 
 	return mover.Init(&srcLoca.EndPoint, &srcLoca.Access, &srcLoca.Security)
 }
 
 func (mover *BlobMover) DownloadRange(objKey string, srcLoca *LocationInfo, buf []byte, start int64, end int64) (size int64,
 	err error) {
-	log.Infof("[blobmover] Try to download object[%s] range[%d - %d]...\n", objKey, start, end)
+	log.Logf("[blobmover] Try to download object[%s] range[%d - %d]...\n", objKey, start, end)
 
 	ctx := context.Background()
 	blobURL := mover.containerURL.NewBlobURL(objKey)
@@ -228,23 +225,23 @@ func (mover *BlobMover) DownloadRange(objKey string, srcLoca *LocationInfo, buf 
 	for tries := 1; tries <= 3; tries++ {
 		err = azblob.DownloadBlobToBuffer(ctx, blobURL, start, count, buf, azblob.DownloadFromBlobOptions{})
 		if err != nil {
-			log.Errorf("[blobomver] donwload object[%s] to buffer failed %d times, err:%v\n", objKey, tries, err)
+			log.Logf("[blobomver] donwload object[%s] to buffer failed %d times, err:%v\n", objKey, tries, err)
 			e := handleAzureBlobErrors(err)
 			if tries >= 3 || e.Error() == DMERR_NoPermission { //If no permission, then no need to retry.
 				return 0, e
 			}
 		} else {
-			log.Infof("[blobmover] download object[%s] range[%d - %d] successfully.\n", objKey, start, end)
+			log.Logf("[blobmover] download object[%s] range[%d - %d] successfully.\n", objKey, start, end)
 			return count, nil
 		}
 	}
 
-	log.Infof("[blobmover] download object[%s] range[%d - %d], should not be here.\n", objKey, start, end)
+	log.Logf("[blobmover] download object[%s] range[%d - %d], should not be here.\n", objKey, start, end)
 	return 0, errors.New(DMERR_InternalError)
 }
 
 func (mover *BlobMover) MultiPartUploadInit(objKey string, destLoca *LocationInfo) (string, error) {
-	log.Infof("[blobmover] Prepare to do part upload for object[%s], container:%s, blob:%s\n",
+	log.Logf("[blobmover] Prepare to do part upload for object[%s], container:%s, blob:%s\n",
 		objKey, destLoca.BucketName, objKey)
 
 	return "", mover.Init(&destLoca.EndPoint, &destLoca.Access, &destLoca.Security)
@@ -267,7 +264,7 @@ func (mover *BlobMover) Base64ToInt64(base64ID string) int64 {
 
 func (mover *BlobMover) UploadPart(objKey string, destLoca *LocationInfo, upBytes int64, buf []byte, partNumber int64,
 	offset int64) error {
-	log.Infof("[blobmover] Try to upload object[%s] range[partnumber#%d,offset#%d]...\n", objKey, partNumber, offset)
+	log.Logf("[blobmover] Try to upload object[%s] range[partnumber#%d,offset#%d]...\n", objKey, partNumber, offset)
 	//TODO: Consider that "A blob can have up to 100,000 uncommitted blocks, but their total size cannot exceed 200,000 MB."
 
 	ctx := context.Background()
@@ -276,26 +273,26 @@ func (mover *BlobMover) UploadPart(objKey string, destLoca *LocationInfo, upByte
 	for tries := 1; tries <= 3; tries++ {
 		_, err := blobURL.StageBlock(ctx, base64ID, bytes.NewReader(buf), azblob.LeaseAccessConditions{}, nil)
 		if err != nil {
-			log.Errorf("[blobmover] upload object[objkey:%s] part[%d] failed %d times. err:%v\n", objKey, partNumber, tries, err)
+			log.Logf("[blobmover] upload object[objkey:%s] part[%d] failed %d times. err:%v\n", objKey, partNumber, tries, err)
 			e := handleAzureBlobErrors(err)
 			if tries >= 3 || e.Error() == DMERR_NoPermission { //If no permission, then no need to retry.
 				return e
 			}
 		} else {
-			log.Infof("[blobmover] Upload range[objkey:%s, partnumber#%d, base64ID#%d] successfully.\n",
+			log.Logf("[blobmover] Upload range[objkey:%s, partnumber#%d, base64ID#%d] successfully.\n",
 				objKey, partNumber, base64ID)
 			mover.completeParts = append(mover.completeParts, base64ID)
 			return nil
 		}
 	}
 
-	log.Infof("[blobmover] upload range[objkey:%s, partnumber#%d, base64ID#%d], should not be here.\n",
+	log.Logf("[blobmover] upload range[objkey:%s, partnumber#%d, base64ID#%d], should not be here.\n",
 		objKey, partNumber, base64ID)
 	return errors.New(DMERR_InternalError)
 }
 
 func (mover *BlobMover) AbortMultipartUpload(objKey string, destLoca *LocationInfo) error {
-	log.Infof("No need to abort multipart upload[objkey:%s].\n", objKey)
+	log.Logf("No need to abort multipart upload[objkey:%s].\n", objKey)
 	return nil
 }
 
@@ -304,17 +301,17 @@ func (mover *BlobMover) CompleteMultipartUpload(objKey string, destLoca *Locatio
 	ctx := context.Background()
 	blobURL := mover.containerURL.NewBlockBlobURL(objKey)
 
-	log.Infof("[blobmover] Try to CompleteMultipartUpload of object[%s].\n", objKey)
+	log.Logf("[blobmover] Try to CompleteMultipartUpload of object[%s].\n", objKey)
 	for tries := 1; tries <= 3; tries++ {
 		_, err := blobURL.CommitBlockList(ctx, mover.completeParts, azblob.BlobHTTPHeaders{}, azblob.Metadata{}, azblob.BlobAccessConditions{})
 		if err != nil {
-			log.Errorf("[blobmover] completeMultipartUpload of object[%s] failed:%v\n", objKey, err)
+			log.Logf("[blobmover] completeMultipartUpload of object[%s] failed:%v\n", objKey, err)
 			e := handleAzureBlobErrors(err)
 			if tries >= 3 || e.Error() == DMERR_NoPermission { //If no permission, then no need to retry.
 				return e
 			}
 		} else {
-			log.Infof("[blobmover] completeMultipartUpload of object[%s] successfully.\n", objKey)
+			log.Logf("[blobmover] completeMultipartUpload of object[%s] successfully.\n", objKey)
 			if destLoca.ClassName != "" {
 				err := mover.setTier(&objKey, &destLoca.ClassName)
 				if err != nil {
@@ -326,12 +323,12 @@ func (mover *BlobMover) CompleteMultipartUpload(objKey string, destLoca *Locatio
 		}
 	}
 
-	log.Infof("[blobmover] completeMultipartUpload of object[%s], should not be here.\n", objKey)
+	log.Logf("[blobmover] completeMultipartUpload of object[%s], should not be here.\n", objKey)
 	return errors.New(DMERR_InternalError)
 }
 
 func ListObjs(loca *LocationInfo, filt *pb.Filter) ([]azblob.BlobItem, error) {
-	log.Infof("[blobmover] List objects of container[%s]\n", loca.BucketName)
+	log.Logf("[blobmover] List objects of container[%s]\n", loca.BucketName)
 	credential, err := azblob.NewSharedKeyCredential(loca.Access, loca.Security)
 	if err != nil {
 		log.Fatalf("[blobmover] create credential failed for list objects, err:%v\n", err)
@@ -355,7 +352,7 @@ func ListObjs(loca *LocationInfo, filt *pb.Filter) ([]azblob.BlobItem, error) {
 		// Get a result segment starting with the blob indicated by the current Marker.
 		listBlob, err := containerURL.ListBlobsFlatSegment(ctx, marker, option)
 		if err != nil {
-			log.Errorf("[blobmover] listBlobsFlatSegment failed:%v\n", err)
+			log.Logf("[blobmover] listBlobsFlatSegment failed:%v\n", err)
 			e := handleAzureBlobErrors(err)
 			return nil, e
 		}

@@ -19,18 +19,17 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
-	"math"
 	"os"
 	"strconv"
 	"time"
 
 	"github.com/globalsign/mgo/bson"
 	"github.com/micro/go-micro/client"
-	"github.com/opensds/multi-cloud/backend/proto"
+	backend "github.com/opensds/multi-cloud/backend/proto"
 	flowtype "github.com/opensds/multi-cloud/dataflow/pkg/model"
-	"github.com/opensds/multi-cloud/datamover/pkg/amazon/s3"
-	"github.com/opensds/multi-cloud/datamover/pkg/azure/blob"
-	"github.com/opensds/multi-cloud/datamover/pkg/ceph/s3"
+	s3mover "github.com/opensds/multi-cloud/datamover/pkg/amazon/s3"
+	blobmover "github.com/opensds/multi-cloud/datamover/pkg/azure/blob"
+	cephs3mover "github.com/opensds/multi-cloud/datamover/pkg/ceph/s3"
 	"github.com/opensds/multi-cloud/datamover/pkg/db"
 	Gcps3mover "github.com/opensds/multi-cloud/datamover/pkg/gcp/s3"
 	obsmover "github.com/opensds/multi-cloud/datamover/pkg/huawei/obs"
@@ -50,10 +49,6 @@ var s3client osdss3.S3Service
 var bkendclient backend.BackendService
 
 var logger = log.New(os.Stdout, "", log.LstdFlags)
-
-const WT_DOWLOAD = 48
-const WT_UPLOAD = 48
-const WT_DELETE = 4
 
 type Migration interface {
 	Init()
@@ -87,7 +82,7 @@ func HandleMsg(msgData []byte) error {
 }
 
 func doMove(ctx context.Context, objs []*osdss3.Object, capa chan int64, th chan int, srcLoca *LocationInfo,
-	destLoca *LocationInfo, remainSource bool, job *flowtype.Job) {
+	destLoca *LocationInfo, remainSource bool) {
 	//Only three routines allowed to be running at the same time
 	//th := make(chan int, simuRoutines)
 	locMap := make(map[string]*LocationInfo)
@@ -98,14 +93,14 @@ func doMove(ctx context.Context, objs []*osdss3.Object, capa chan int64, th chan
 			continue
 		}
 		logger.Printf("************Begin to move obj(key:%s)\n", objs[i].ObjectKey)
-		go move(ctx, objs[i], capa, th, srcLoca, destLoca, remainSource, locMap, job)
+		go move(ctx, objs[i], capa, th, srcLoca, destLoca, remainSource, locMap)
 		//Create one routine
 		th <- 1
 		logger.Printf("doMigrate: produce 1 routine, len(th):%d.\n", len(th))
 	}
 }
 
-func MoveObj(obj *osdss3.Object, srcLoca *LocationInfo, destLoca *LocationInfo, job *flowtype.Job) error {
+func MoveObj(obj *osdss3.Object, srcLoca *LocationInfo, destLoca *LocationInfo) error {
 	logger.Printf("*****Move object[%s] from #%s# to #%s#, size is %d.\n", obj.ObjectKey, srcLoca.BakendName,
 		destLoca.BakendName, obj.Size)
 	if obj.Size <= 0 {
@@ -145,14 +140,11 @@ func MoveObj(obj *osdss3.Object, srcLoca *LocationInfo, destLoca *LocationInfo, 
 			err = errors.New("not support source backend type")
 		}
 	}
+
 	if err != nil {
 		logger.Printf("download object[%s] failed.", obj.ObjectKey)
 		return err
 	}
-	if job.Type == "migration" {
-		progress(job, size, WT_DOWLOAD)
-	}
-
 	logger.Printf("Download object[%s] succeed, size=%d\n", obj.ObjectKey, size)
 
 	//upload
@@ -187,9 +179,6 @@ func MoveObj(obj *osdss3.Object, srcLoca *LocationInfo, destLoca *LocationInfo, 
 	if err != nil {
 		logger.Printf("upload object[bucket:%s,key:%s] failed, err:%v.\n", destLoca.BucketName, uploadObjKey, err)
 	} else {
-		if job.Type == "migration" {
-			progress(job, size, WT_UPLOAD)
-		}
 		logger.Printf("upload object[bucket:%s,key:%s] successfully.\n", destLoca.BucketName, uploadObjKey)
 	}
 
@@ -313,7 +302,7 @@ func deleteMultipartUpload(objKey, virtBucket, backendName, uploadId string) {
 	s3client.DeleteUploadRecord(context.Background(), &record)
 }
 
-func MultipartMoveObj(obj *osdss3.Object, srcLoca *LocationInfo, destLoca *LocationInfo, job *flowtype.Job) error {
+func MultipartMoveObj(obj *osdss3.Object, srcLoca *LocationInfo, destLoca *LocationInfo) error {
 	partCount := int64(obj.Size / PART_SIZE)
 	if obj.Size%PART_SIZE != 0 {
 		partCount++
@@ -363,9 +352,6 @@ func MultipartMoveObj(obj *osdss3.Object, srcLoca *LocationInfo, destLoca *Locat
 			logger.Printf("internal error, currPartSize=%d, readSize=%d\n", currPartSize, readSize)
 			return errors.New(DMERR_InternalError)
 		}
-		if job.Type == "migration" {
-			progress(job, currPartSize, WT_DOWLOAD)
-		}
 
 		//upload
 		if partNumber == 1 {
@@ -387,10 +373,6 @@ func MultipartMoveObj(obj *osdss3.Object, srcLoca *LocationInfo, destLoca *Locat
 			}
 			return errors.New("multipart upload failed")
 		}
-		if job.Type == "migration" {
-			progress(job, currPartSize, WT_UPLOAD)
-		}
-
 		//completeParts = append(completeParts, completePart)
 	}
 
@@ -461,9 +443,9 @@ func deleteObj(ctx context.Context, obj *osdss3.Object, loca *LocationInfo) erro
 }
 
 func move(ctx context.Context, obj *osdss3.Object, capa chan int64, th chan int, srcLoca *LocationInfo,
-	destLoca *LocationInfo, remainSource bool, locaMap map[string]*LocationInfo, job *flowtype.Job) {
+	destLoca *LocationInfo, remainSource bool, locaMap map[string]*LocationInfo) {
 	logger.Printf("Obj[%s] is stored in the backend is [%s], default backend is [%s], target backend is [%s].\n",
-		obj.ObjectKey, obj.Location, srcLoca.BakendName, destLoca.BakendName)
+		obj.ObjectKey, obj.Backend, srcLoca.BakendName, destLoca.BakendName)
 
 	succeed := true
 	needMove := true
@@ -485,9 +467,9 @@ func move(ctx context.Context, obj *osdss3.Object, capa chan int64, th chan int,
 			}
 		}
 		if obj.Size <= PART_SIZE {
-			err = MoveObj(obj, newSrcLoca, destLoca, job)
+			err = MoveObj(obj, newSrcLoca, destLoca)
 		} else {
-			err = MultipartMoveObj(obj, newSrcLoca, destLoca, job)
+			err = MultipartMoveObj(obj, newSrcLoca, destLoca)
 		}
 
 		if err != nil {
@@ -499,16 +481,16 @@ func move(ctx context.Context, obj *osdss3.Object, capa chan int64, th chan int,
 	//add object metadata to the destination bucket if destination is not self-defined
 	if succeed && destLoca.VirBucket != "" {
 		obj.BucketName = destLoca.VirBucket
-		obj.Location = destLoca.BakendName
+		obj.Backend = destLoca.BakendName
 		obj.LastModified = time.Now().Unix()
-		/*_, err := s3client.CreateObject(ctx, obj)
+		_, err := s3client.CreateObject(ctx, obj)
 		if err != nil {
 			logger.Printf("add object metadata of obj [objKey:%s] to bucket[name:%s] failed, err:%v.\n", obj.ObjectKey,
 				obj.BucketName, err)
 		} else {
 			logger.Printf("add object metadata of obj [objKey:%s] to bucket[name:%s] succeed.\n", obj.ObjectKey,
 				obj.BucketName)
-		}*/
+		}
 	}
 
 	//Delete source data if needed
@@ -522,9 +504,6 @@ func move(ctx context.Context, obj *osdss3.Object, capa chan int64, th chan int,
 		//If migrate success, update capacity
 		logger.Printf("  migrate object[%s] succeed.", obj.ObjectKey)
 		capa <- obj.Size
-		if job.Type == "migration" {
-			progress(job, obj.Size, WT_DELETE)
-		}
 	} else {
 		logger.Printf("  migrate object[%s] failed.", obj.ObjectKey)
 		capa <- -1
@@ -564,7 +543,6 @@ func runjob(in *pb.RunJobRequest) error {
 	j := flowtype.Job{Id: bson.ObjectIdHex(in.Id)}
 	j.StartTime = time.Now()
 	j.Status = flowtype.JOB_STATUS_RUNNING
-	j.Type="migration"
 	updateJob(&j)
 
 	// get location information
@@ -578,7 +556,6 @@ func runjob(in *pb.RunJobRequest) error {
 
 	// get total count and total size of objects need to be migrated
 	totalCount, totalSize, err := countObjs(ctx, in)
-
 	j.TotalCount = totalCount
 	j.TotalCapacity = totalSize
 	if err != nil || totalCount == 0 || totalSize == 0 {
@@ -614,7 +591,7 @@ func runjob(in *pb.RunJobRequest) error {
 		}
 
 		//Do migration for each object.
-		go doMove(ctx, objs, capa, th, srcLoca, destLoca, in.RemainSource, &j)
+		go doMove(ctx, objs, capa, th, srcLoca, destLoca, in.RemainSource)
 		if len(objs) < int(limit) {
 			break
 		}
@@ -637,8 +614,9 @@ func runjob(in *pb.RunJobRequest) error {
 				if totalObjs < 100 || count == totalObjs || count%deci == 0 {
 					//update database
 					j.PassedCount = (int64(passedCount))
-					j.PassedCapacity=capacity
-					logger.Printf("ObjectMigrated:%d,TotalCapacity:%d Progress:%d\n", j.PassedCount, j.TotalCapacity, j.Progress)
+					j.PassedCapacity = capacity
+					j.Progress = int64(capacity * 100 / j.TotalCapacity)
+					logger.Printf("capacity:%d,TotalCapacity:%d Progress:%d\n", capacity, j.TotalCapacity, j.Progress)
 					db.DbAdapter.UpdateJob(&j)
 				}
 			}
@@ -679,15 +657,4 @@ func runjob(in *pb.RunJobRequest) error {
 	}
 
 	return ret
-}
-
-// To calculate Progress of migration process
-func progress(job *flowtype.Job, size int64, wt float64) {
-	// Migrated Capacity = Old_migrated capacity + WT(Process)*Size of Object/100
-	MigratedCapacity := job.MigratedCapacity + float64(size)*(wt/100)
-	job.MigratedCapacity = math.Round(MigratedCapacity*100) / 100
-	// Progress = Migrated Capacity*100/ Total Capacity
-	job.Progress = int64(job.MigratedCapacity * 100 / float64(job.TotalCapacity))
-	logger.Printf("[INFO] Progress %d", job.Progress)
-	db.DbAdapter.UpdateJob(job)
 }

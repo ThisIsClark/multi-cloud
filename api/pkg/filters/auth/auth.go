@@ -18,7 +18,7 @@ import (
 	"os"
 
 	"github.com/emicklei/go-restful"
-	log "github.com/sirupsen/logrus"
+	"github.com/micro/go-log"
 	c "github.com/opensds/multi-cloud/api/pkg/context"
 )
 
@@ -34,9 +34,9 @@ func NewNoAuth() AuthBase {
 }
 
 func (auth *NoAuth) Filter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
-	log.Info("Noauth filter begin")
+	log.Log("Noauth filter begin")
 	ctx := req.Attribute(c.KContext).(*c.Context)
-	log.Info(ctx.TenantId)
+	log.Log(ctx.TenantId)
 	params := req.PathParameters()
 	if tenantId, ok := params["tenantId"]; ok {
 		ctx.TenantId = tenantId
@@ -48,12 +48,12 @@ func (auth *NoAuth) Filter(req *restful.Request, resp *restful.Response, chain *
 
 func FilterFactory() restful.FilterFunction {
 	var auth AuthBase
-	log.Info(os.Getenv("OS_AUTH_AUTHSTRATEGY"))
+	log.Log(os.Getenv("OS_AUTH_AUTHSTRATEGY"))
 	switch os.Getenv("OS_AUTH_AUTHSTRATEGY") {
 	case "keystone":
 		auth = NewKeystone()
 	case "noauth":
-		log.Info("filter is noauth")
+		log.Log("filter is noauth")
 		auth = NewNoAuth()
 	default:
 		auth = NewNoAuth()

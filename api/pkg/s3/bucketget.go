@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	"github.com/emicklei/go-restful"
-	log "github.com/sirupsen/logrus"
+	"github.com/micro/go-log"
 	"github.com/opensds/multi-cloud/api/pkg/common"
 	"github.com/opensds/multi-cloud/s3/proto"
 )
@@ -31,12 +31,12 @@ import (
 func checkLastmodifiedFilter(fmap *map[string]string) error {
 	for k, v := range *fmap {
 		if k != "lt" && k != "lte" && k != "gt" && k != "gte" {
-			log.Infof("invalid query parameter:k=%s,v=%s\n", k, v)
+			log.Logf("invalid query parameter:k=%s,v=%s\n", k, v)
 			return errors.New("invalid query parameter")
 		} else {
 			_, err := strconv.Atoi(v)
 			if err != nil {
-				log.Errorf("invalid query parameter:k=%s,v=%s, err=%v\n", k, v, err)
+				log.Logf("invalid query parameter:k=%s,v=%s, err=%v\n", k, v, err)
 				return errors.New("invalid query parameter")
 			}
 		}
@@ -48,13 +48,13 @@ func checkLastmodifiedFilter(fmap *map[string]string) error {
 func checkObjKeyFilter(val string) (string, error) {
 	// val should be like: objeKey=like:parttern
 	if strings.HasPrefix(val, "like:") == false {
-		log.Infof("invalid object key filter:%s\n", val)
+		log.Logf("invalid object key filter:%s\n", val)
 		return "", fmt.Errorf("invalid object key filter:%s", val)
 	}
 
 	vals := strings.Split(val, ":")
 	if len(vals) <= 1 {
-		log.Errorf("invalid object key filter:%s\n", val)
+		log.Logf("invalid object key filter:%s\n", val)
 		return "", fmt.Errorf("invalid object key filter:%s", val)
 	}
 
@@ -67,34 +67,34 @@ func checkObjKeyFilter(val string) (string, error) {
 }
 
 func (s *APIService) BucketGet(request *restful.Request, response *restful.Response) {
-	bucketName := request.PathParameter("bucketName")
-	log.Infof("Received request for bucket details: %s\n", bucketName)
-
 	limit, offset, err := common.GetPaginationParam(request)
 	if err != nil {
-		log.Errorf("get pagination parameters failed: %v\n", err)
+		log.Logf("get pagination parameters failed: %v\n", err)
 		response.WriteError(http.StatusInternalServerError, err)
 		return
 	}
 
+	bucketName := request.PathParameter("bucketName")
+	log.Logf("Received request for bucket details: %s\n", bucketName)
+
 	filterOpts := []string{common.KObjKey, common.KLastModified}
 	filter, err := common.GetFilter(request, filterOpts)
 	if err != nil {
-		log.Errorf("get filter failed: %v\n", err)
+		log.Logf("get filter failed: %v\n", err)
 		response.WriteError(http.StatusBadRequest, err)
 		return
 	} else {
-		log.Infof("Get filter for BucketGet, filterOpts=%+v, filter=%+v\n",
+		log.Logf("Get filter for BucketGet, filterOpts=%+v, filter=%+v\n",
 			filterOpts, filter)
 	}
 
 	if filter[common.KObjKey] != "" {
-		// filter[common.KObjKey] should be like: like:parttern
+		//filter[common.KObjKey] should be like: like:parttern
 		ret, err := checkObjKeyFilter(filter[common.KObjKey])
 		if err != nil {
-			log.Errorf("invalid objkey:%s\v", filter[common.KObjKey])
+			log.Logf("invalid objkey:%s\v", filter[common.KObjKey])
 			response.WriteError(http.StatusBadRequest,
-				fmt.Errorf("invalid objkey filter, it should be like objkey=like:parttern"))
+				fmt.Errorf("invalid objkey, it should be like objkey=like:parttern"))
 			return
 		}
 		filter[common.KObjKey] = ret
@@ -105,14 +105,14 @@ func (s *APIService) BucketGet(request *restful.Request, response *restful.Respo
 		var tmFilter map[string]string
 		err := json.Unmarshal([]byte(filter[common.KLastModified]), &tmFilter)
 		if err != nil {
-			log.Errorf("invalid lastModified:%s\v", filter[common.KLastModified])
+			log.Logf("invalid lastModified:%s\v", filter[common.KLastModified])
 			response.WriteError(http.StatusBadRequest,
 				fmt.Errorf("invalid lastmodified, it should be like lastmodified={\"lt\":\"numb\"}"))
 			return
 		}
 		err = checkLastmodifiedFilter(&tmFilter)
 		if err != nil {
-			log.Errorf("invalid lastModified:%s\v", filter[common.KLastModified])
+			log.Logf("invalid lastModified:%s\v", filter[common.KLastModified])
 			response.WriteError(http.StatusBadRequest,
 				fmt.Errorf("invalid lastmodified, it should be like lastmodified={\"lt\":\"numb\"}"))
 			return
@@ -128,12 +128,12 @@ func (s *APIService) BucketGet(request *restful.Request, response *restful.Respo
 
 	ctx := common.InitCtxWithAuthInfo(request)
 	res, err := s.s3Client.ListObjects(ctx, &req)
-	log.Infof("list objects result: %v\n", res)
+	log.Logf("list objects result: %v\n", res)
 	if err != nil {
 		response.WriteError(http.StatusInternalServerError, err)
 		return
 	}
 
-	log.Info("Get bucket successfully.")
+	log.Log("Get bucket successfully.")
 	response.WriteEntity(res)
 }

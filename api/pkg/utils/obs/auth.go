@@ -6,8 +6,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 )
 
 func (obsClient ObsClient) doAuthTemporary(method, bucketName, objectKey string, params map[string]string,
@@ -25,7 +23,7 @@ func (obsClient ObsClient) doAuthTemporary(method, bucketName, objectKey string,
 	prepareHostAndDate(headers, hostName, isV4)
 
 	if obsClient.conf.securityProvider == nil || obsClient.conf.securityProvider.ak == "" || obsClient.conf.securityProvider.sk == "" {
-		log.Warn("No ak/sk provided, skip to construct authorization")
+		doLog(LEVEL_WARN, "No ak/sk provided, skip to construct authorization")
 	} else {
 		if obsClient.conf.securityProvider.securityToken != "" {
 			params[HEADER_STS_TOKEN_AMZ] = obsClient.conf.securityProvider.securityToken
@@ -93,7 +91,7 @@ func (obsClient ObsClient) doAuth(method, bucketName, objectKey string, params m
 	prepareHostAndDate(headers, hostName, isV4)
 
 	if obsClient.conf.securityProvider == nil || obsClient.conf.securityProvider.ak == "" || obsClient.conf.securityProvider.sk == "" {
-		log.Warn("No ak/sk provided, skip to construct authorization")
+		doLog(LEVEL_WARN, "No ak/sk provided, skip to construct authorization")
 	} else {
 		if obsClient.conf.securityProvider.securityToken != "" {
 			headers[HEADER_STS_TOKEN_AMZ] = []string{obsClient.conf.securityProvider.securityToken}
@@ -215,7 +213,7 @@ func attachHeaders(headers map[string][]string) string {
 
 func getV2StringToSign(method, canonicalizedUrl string, headers map[string][]string) string {
 	stringToSign := strings.Join([]string{method, "\n", attachHeaders(headers), "\n", canonicalizedUrl}, "")
-	log.Debug("The v2 auth stringToSign:\n%s", stringToSign)
+	doLog(LEVEL_DEBUG, "The v2 auth stringToSign:\n%s", stringToSign)
 	return stringToSign
 }
 
@@ -257,7 +255,7 @@ func getV4StringToSign(method, canonicalizedUrl, queryUrl, scope, longDate, payl
 	canonicalRequest = append(canonicalRequest, payload)
 
 	_canonicalRequest := strings.Join(canonicalRequest, "")
-	log.Debug("The v4 auth canonicalRequest:\n%s", _canonicalRequest)
+	doLog(LEVEL_DEBUG, "The v4 auth canonicalRequest:\n%s", _canonicalRequest)
 
 	stringToSign := make([]string, 0, 7)
 	stringToSign = append(stringToSign, V4_HASH_PREFIX)
@@ -270,7 +268,7 @@ func getV4StringToSign(method, canonicalizedUrl, queryUrl, scope, longDate, payl
 
 	_stringToSign := strings.Join(stringToSign, "")
 
-	log.Debug("The v4 auth stringToSign:\n%s", _stringToSign)
+	doLog(LEVEL_DEBUG, "The v4 auth stringToSign:\n%s", _stringToSign)
 	return _stringToSign
 }
 
