@@ -14,6 +14,8 @@
 
 package model
 
+import "encoding/xml"
+
 var Xmlns = "http://s3.amazonaws.com/doc/2006-03-01"
 
 type CreateBucketConfiguration struct {
@@ -30,6 +32,7 @@ type Bucket struct {
 	Name               string `xml:"Name"`
 	CreateTime         string `xml:"CreateTime"`
 	LocationConstraint string `xml:"LocationConstraint"`
+	VersionOpts        VersioningConfiguration
 }
 
 type ListAllMyBucketsResult struct {
@@ -45,6 +48,8 @@ type InitiateMultipartUploadResult struct {
 	UploadId string `xml:"UploadId"`
 }
 
+//PartNumber should be between 1 and 10000.
+//Please refer to https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/dev/qfacts.html
 type UploadPartResult struct {
 	Xmlns      string `xml:"xmlns,attr"`
 	PartNumber int64  `xml:"PartNumber"`
@@ -54,11 +59,12 @@ type UploadPartResult struct {
 type Part struct {
 	PartNumber int64  `xml:"PartNumber"`
 	ETag       string `xml:"ETag"`
+	Size       int64  `xml:"size"`
 }
 
 type CompleteMultipartUpload struct {
 	Xmlns string `xml:"xmlns,attr"`
-	Part  []Part `xml:"Part"`
+	Parts []Part `xml:"Part"`
 }
 
 type CompleteMultipartUploadResult struct {
@@ -66,6 +72,7 @@ type CompleteMultipartUploadResult struct {
 	Location string `xml:"Location"`
 	Bucket   string `xml:"Bucket"`
 	Key      string `xml:"Key"`
+	Size     int64  `xml:"Size"`
 	ETag     string `xml:"ETag"`
 }
 
@@ -121,4 +128,9 @@ type StorageClass struct {
 type ListStorageClasses struct {
 	Xmlns   string         `xml:"xmlns,attr"`
 	Classes []StorageClass `xml:"Class"`
+}
+
+type VersioningConfiguration struct {
+	XMLName xml.Name `xml:"VersioningConfiguration"`
+	Status  string   `xml:"Status"`
 }

@@ -1,3 +1,16 @@
+// Copyright 2019 The OpenSDS Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package storage
 
 import (
@@ -7,13 +20,13 @@ import (
 	"crypto/rand"
 	"errors"
 	"io"
-	"os"
 	"path/filepath"
 	"sync"
 
 	"github.com/opensds/multi-cloud/s3/pkg/datastore/yig/config"
 	"github.com/opensds/multi-cloud/s3/pkg/datastore/yig/crypto"
 	"github.com/opensds/multi-cloud/s3/pkg/datastore/yig/meta"
+	"github.com/opensds/multi-cloud/s3/pkg/datastore/yig/utils"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -33,10 +46,10 @@ type YigStorage struct {
 	DataStorage map[string]*CephStorage
 	MetaStorage *meta.Meta
 	KMS         crypto.KMS
-	logfile     *os.File
-	Logger      *log.Logger
 	Stopping    bool
 	WaitGroup   *sync.WaitGroup
+	idGen       *utils.GlobalIdGen
+	gcMgr       *GcMgr
 }
 
 func New(cfg *config.Config) (*YigStorage, error) {
@@ -49,12 +62,18 @@ func New(cfg *config.Config) (*YigStorage, error) {
 		log.Errorf("failed to new meta, err: %v", err)
 		return nil, err
 	}
+	idGen, err := utils.NewGlobalIdGen(int64(cfg.Endpoint.MachineId))
+	if err != nil {
+		log.Errorf("failed to new global id generator, err: %v", err)
+		return nil, err
+	}
 	yig := YigStorage{
 		DataStorage: make(map[string]*CephStorage),
 		MetaStorage: metaStorage,
 		KMS:         kms,
 		Stopping:    false,
 		WaitGroup:   new(sync.WaitGroup),
+		idGen:       idGen,
 	}
 	CephConfigPattern := cfg.StorageCfg.CephPath
 	if CephConfigPattern == "" {
@@ -81,6 +100,10 @@ func New(cfg *config.Config) (*YigStorage, error) {
 		return nil, err
 	}
 
+	yig.gcMgr = NewGcMgr(RootContext, &yig, cfg.Endpoint.GcCheckTime)
+	// start gc
+	yig.gcMgr.Start()
+	// start recycler
 	initializeRecycler(&yig)
 	return &yig, nil
 }
@@ -88,11 +111,11 @@ func New(cfg *config.Config) (*YigStorage, error) {
 func (y *YigStorage) Close() error {
 	y.Stopping = true
 	log.Info("Stopping storage...")
+	y.gcMgr.Stop()
 	y.WaitGroup.Wait()
 	log.Info("done")
 	log.Info("Stopping MetaStorage...")
 	y.MetaStorage.Close()
-	y.logfile.Close()
 
 	return nil
 }

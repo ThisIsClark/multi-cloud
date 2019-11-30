@@ -17,13 +17,15 @@
 package s3
 
 import (
-	"bytes"
 	"encoding/xml"
 	"net/http"
+	"path"
 	"strconv"
+	"time"
 
 	"github.com/emicklei/go-restful"
 	. "github.com/opensds/multi-cloud/s3/error"
+	. "github.com/opensds/multi-cloud/api/pkg/s3/datatype"
 	"github.com/opensds/multi-cloud/s3/pkg/helper"
 )
 
@@ -31,13 +33,12 @@ const (
 	timeFormatAMZ = "2006-01-02T15:04:05.000Z" // Reply date format
 )
 
-// Encodes the response headers into XML format.
-func EncodeResponse(response interface{}) []byte {
-	var bytesBuffer bytes.Buffer
-	bytesBuffer.WriteString(xml.Header)
-	e := xml.NewEncoder(&bytesBuffer)
-	e.Encode(response)
-	return bytesBuffer.Bytes()
+func GetFinalError(err error, errorCode int32) error {
+	if errorCode != int32(ErrNoErr) {
+		return S3ErrorCode(errorCode)
+	} else {
+		return err
+	}
 }
 
 // WriteSuccessResponse write success headers and response if any.
@@ -58,6 +59,11 @@ func WriteSuccessResponse(response *restful.Response, data []byte) {
 func WriteErrorResponse(response *restful.Response, request *restful.Request, err error) {
 	WriteErrorResponseHeaders(response, err)
 	WriteErrorResponseNoHeader(response, request, err, request.Request.URL.Path)
+}
+
+func WriteErrorResponseWithResource(response *restful.Response, request *restful.Request, err error, resource string) {
+	WriteErrorResponseHeaders(response, err)
+	WriteErrorResponseNoHeader(response, request, err, resource)
 }
 
 func WriteErrorResponseHeaders(response *restful.Response, err error) {
@@ -95,6 +101,45 @@ func WriteErrorResponseNoHeader(response *restful.Response, request *restful.Req
 
 	response.Write(encodedErrorResponse)
 	response.ResponseWriter.(http.Flusher).Flush()
+}
+
+// getLocation get URL location.
+func GetLocation(r *http.Request) string {
+	return path.Clean(r.URL.Path) // Clean any trailing slashes.
+}
+
+// writeSuccessNoContent write success headers with http status 204
+func WriteSuccessNoContent(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func WriteApiErrorResponse(response *restful.Response, request *restful.Request, status int, awsErrCode, message string) {
+	// write header
+	response.WriteHeader(status)
+
+	// HEAD should have no body, do not attempt to write to it
+	if request.Request.Method == "HEAD" {
+		return
+	}
+
+	errorResponse := ApiErrorResponse{}
+	errorResponse.AwsErrorCode = awsErrCode
+	errorResponse.Message = message
+	errorResponse.Resource = request.Request.URL.Path
+	errorResponse.HostId = helper.CONFIG.InstanceId
+
+	encodedErrorResponse := EncodeResponse(errorResponse)
+
+	response.Write(encodedErrorResponse)
+	response.ResponseWriter.(http.Flusher).Flush()
+}
+
+// GenerateCopyObjectResponse
+func GenerateCopyObjectResponse(etag string, lastModified time.Time) CopyObjectResponse {
+	return CopyObjectResponse{
+		ETag:         "\"" + etag + "\"",
+		LastModified: lastModified.UTC().Format(timeFormatAMZ),
+	}
 }
 
 // APIErrorResponse - error response format

@@ -24,6 +24,7 @@ import (
 	c "github.com/opensds/multi-cloud/api/pkg/context"
 	"github.com/opensds/multi-cloud/s3/error"
 	"github.com/opensds/multi-cloud/s3/pkg/model"
+	"github.com/opensds/multi-cloud/s3/pkg/utils"
 	"github.com/opensds/multi-cloud/s3/proto"
 	log "github.com/sirupsen/logrus"
 )
@@ -49,6 +50,8 @@ func (s *APIService) BucketPut(request *restful.Request, response *restful.Respo
 	bucket.UserId = actx.UserId
 	bucket.Deleted = false
 	bucket.CreateTime = time.Now().Unix()
+	bucket.Versioning = &s3.BucketVersioning{}
+	bucket.Versioning.Status = utils.VersioningDisabled // it's the default
 	log.Infof("Bucket PUT: TenantId=%s, UserId=%s\n", bucket.TenantId, bucket.UserId)
 
 	body := ReadBody(request)
@@ -76,13 +79,14 @@ func (s *APIService) BucketPut(request *restful.Request, response *restful.Respo
 		return
 	}
 
-	res, err := s.s3Client.CreateBucket(ctx, &bucket)
-	if err != nil {
-		log.Errorf("create bucket failed, err:%v\n", err)
-		WriteErrorResponse(response, request, err)
+	rsp, err := s.s3Client.CreateBucket(ctx, &bucket)
+	if HandleS3Error(response, request, err, rsp.ErrorCode) != nil {
+		log.Errorf("delete bucket[%s] failed, err=%v, errCode=%d\n", bucketName, err, rsp.ErrorCode)
 		return
 	}
 
 	log.Infof("create bucket[name=%s, defaultLocation=%s] successfully.\n", bucket.Name, bucket.DefaultLocation)
-	WriteSuccessResponse(response, EncodeResponse(res))
+	// Make sure to add Location information here only for bucket
+	response.Header().Set("Location", GetLocation(request.Request))
+	WriteSuccessResponse(response, nil)
 }
